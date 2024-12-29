@@ -1,0 +1,9 @@
+#!name=京东pt_key上传TG
+#!desc=京东pt_key上传(点消息)更新时间2024-12-28
+#!system=ios
+
+[Script]
+京东上传 = type=http-request,pattern=^https:\/\/api\.m\.jd\.com\/client\.action\?functionId=getSessionLog,requires-body=1,max-size=0,timeout=1000,script-path=https://raw.githubusercontent.com/15974296618/my_scripts/main/jd_ck.js,script-update-interval=0
+
+[MITM]
+hostname = %APPEND% api.m.jd.com, api-dd.jd.com, sh.jd.com, blackhole.m.jd.com
