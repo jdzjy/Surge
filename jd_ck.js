@@ -27,7 +27,7 @@ if (_TGUserID) {
   }
 
   try {
-    const cookie = `pt_pin=${pin};pt_key=${key};`;
+    const cookie = `pt_key=${key};pt_pin=${pin};`;
     const userName = pin;
     const decodeName = decodeURIComponent(userName);
     let cookiesData = JSON.parse($.getData('pt_keyList') || '[]');
@@ -65,11 +65,11 @@ if (_TGUserID) {
       $.needUpload = true;
     }
     $.setData(JSON.stringify(cookiesData, null, 2), 'pt_keyList');
-     $.msg(
-       '用户名: ' + decodeName,
-       '',
-       tipPrefix + cookieName + 'Cookie成功 🎉'
-     );
+ //    $.msg(
+ //      '用户名: ' + decodeName,
+ //      '',
+ //      tipPrefix + cookieName + 'Cookie成功 🎉'
+ //    );
 
     if ($.needUpload) {
       for (const userId of $.TGUserIDs) {
