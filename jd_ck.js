@@ -27,7 +27,7 @@ if (_TGUserID) {
   }
 
   try {
-    const cookie = `pt_pin=${pin};pt_key=${key};`;
+    const cookie = `pt_key=${key};pt_pin=${pin};`;
     const userName = pin;
     const decodeName = decodeURIComponent(userName);
     let cookiesData = JSON.parse($.getData('pt_keyList') || '[]');
