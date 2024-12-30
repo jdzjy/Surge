@@ -8,8 +8,8 @@
 const $ = new Env('♨️上传 pt_key');
 let CK = $request.headers['Cookie'] || $request.headers['cookie'];
 
-const pin = CK.match(/pin=([^=;]+?);/)[1];
 const key = CK.match(/pt_key=([^=;]+?);/)[1];
+const pin = CK.match(/pin=([^=;]+?);/)[1];
 const _TGUserID = $.getData('JDGiaoBot');
 
 $.TGBotToken = '7317719510:AAG3qbEYQ5AYZqJX2GZJk-t4I0ov0IR-OPk';
@@ -19,7 +19,7 @@ if (_TGUserID) {
 }
 
 !(async () => {
-  if (!pin || !key) {
+  if (!key || !pin) {
     $.desc = '未找到 pt_key';
     $.msg($.name, $.subt, $.desc);
 
