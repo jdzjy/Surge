@@ -2,9 +2,35 @@
   "id": "jdzjy.app.sub",
   "name": "jdzjy 脚本订阅",
   "author": "@jdzjy",
-  "icon": "https://avatars0.githubusercontent.com/u/9592236",
+  "icon": "https://avatars.githubusercontent.com/u/167280868?v=4",
   "repo": "https://github.com/jdzjy/Surge",
   "apps": [
+    {
+      "id": "jdzjy_TG",
+      "name": "wskey 提取器",
+      "keys": ["jdzjy_TGUserID", "wskeyList"],
+      "author": "@jdzjy",
+      "icons": [
+        "https://raw.githubusercontent.com/id77/QuantumultX/master/icon/jd_car.png",
+        "https://raw.githubusercontent.com/id77/QuantumultX/master/icon/jd_car.png"
+      ],
+      "settings": [
+        {
+          "id": "jdzjy_TGUserID",
+          "name": "Telegram User ID",
+          "val": "",
+          "type": "number"
+        },
+        {
+          "id": "wskeyList",
+          "name": "wskey List",
+          "val": "",
+          "type": "textarea",
+          "autoGrow": true,
+          "rows": 2
+        }
+      ]
+    },    
     {
       "id": "jdzjy_TG",
       "name": "pt_key 提取器",
