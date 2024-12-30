@@ -1,22 +1,22 @@
 {
-  "id": "id77.app.sub",
-  "name": "id77 脚本订阅",
-  "author": "@id77",
+  "id": "jdzjy.app.sub",
+  "name": "jdzjy 脚本订阅",
+  "author": "@jdzjy",
   "icon": "https://avatars0.githubusercontent.com/u/9592236",
-  "repo": "https://github.com/id77/QuantumultX/tree/master",
+  "repo": "https://github.com/jdzjy/Surge",
   "apps": [
     {
-      "id": "id77_TG",
+      "id": "jdzjy_TG",
       "name": "pt_key 提取器",
-      "keys": ["id77_TGUserID", "pt_keyList"],
-      "author": "@id77",
+      "keys": ["jdzjy_TGUserID", "pt_keyList"],
+      "author": "@jdzjy",
       "icons": [
         "https://raw.githubusercontent.com/id77/QuantumultX/master/icon/jd_car.png",
         "https://raw.githubusercontent.com/id77/QuantumultX/master/icon/jd_car.png"
       ],
       "settings": [
         {
-          "id": "id77_TGUserID",
+          "id": "jdzjy_TGUserID",
           "name": "Telegram User ID",
           "val": "",
           "type": "number"
