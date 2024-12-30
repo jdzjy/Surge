@@ -6,7 +6,7 @@
   "repo": "https://github.com/jdzjy/Surge",
   "apps": [
     {
-      "id": "jdzjy_TG",
+      "id": "jdzjy_wskey",
       "name": "wskey 提取器",
       "keys": ["jdzjy_TGUserID", "wskeyList"],
       "author": "@jdzjy",
@@ -32,7 +32,7 @@
       ]
     },    
     {
-      "id": "jdzjy_TG",
+      "id": "jdzjy_pt_key",
       "name": "pt_key 提取器",
       "keys": ["jdzjy_TGUserID", "pt_keyList"],
       "author": "@jdzjy",
