@@ -11,7 +11,7 @@
  */
 
 const $ = new Env('京东CK上传');
-const TGBotToken = '7317719510:AAG3qbEYQ5AYZqJX2GZJk-t4I0ov0IR-OPk';
+const TGBotToken = '8235119091:AAFFADuWJAW9Ivjz2L2D-AVAmldzpwaKhzk';
 const TGUserIDs = [7070580063];
 
 // 主函数
