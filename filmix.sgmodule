@@ -5,7 +5,7 @@
 
 [Script]
 # 拦截用户信息接口，执行本地的 filmix.js 脚本修改响应体
-filmix_vip = type=http-response, pattern=^https:\/\/appv3\.filmix\.com\.cn\/api\/v2\/user\/user\/info, requires-body=1, max-size=0, script-path=filmix.js
+filmix_vip = type=http-response, pattern=^https:\/\/appv3\.filmix\.com\.cn\/api\/v2\/user\/user\/info, requires-body=1, max-size=0, script-path=https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/filmix.js
 
 [MITM]
 # 添加 MITM 解密主机名
