@@ -1,10 +1,10 @@
 #!name=京东wskey上传TG
-#!desc=京东wskey上传(支持多域名组合拼接提取)更新时间2026-03-31
+#!desc=京东pt_key和wskey上传(适配sso新接口)更新时间2026-03-31
 #!system=ios
 
 [Script]
 # wskey上传脚本  
-京东wskey上传 = type=http-request,pattern=^https:\/\/(sso\.jd\.com\/appJdst\/update|sh\.jd\.com|api\.m\.jd\.com\/client\.action),requires-body=1,max-size=0,timeout=1000,script-path=https://raw.githubusercontent.com/15974296618/my_scripts/main/wskey.js,script-update-interval=0
+京东wskey上传 = type=http-request,pattern=^https:\/\/sso\.jd\.com\/appJdst\/update,requires-body=1,max-size=0,timeout=1000,script-path=https://raw.githubusercontent.com/15974296618/my_scripts/main/wskey.js,script-update-interval=0
 
 [MITM]
-hostname = %APPEND% sso.jd.com, sh.jd.com, api.m.jd.com
+hostname = %APPEND% sso.jd.com
