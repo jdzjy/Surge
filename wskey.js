@@ -2,6 +2,7 @@
  * 1、打开App，自动获取 wskey 上传
  * 2、点击APP-个人中心，点消息，自动捕抓 wskey 上传
  * 注：如有变更才会上传，如果 wskey 没变，不会重复上传。
+ * 使用前请在 BoxJs 的“Telegram 通用配置”中填写 Bot Token 和 User ID。
  */
 
 const $ = new Env('♨️上传 wskey');
@@ -29,13 +30,16 @@ if (typeof $request !== 'undefined' && $request.body) {
   }
 }
 
-const _TGUserID = $.getData('JDGiaoBot');
+const _TGBotToken = String($.getData('jdzjy_TGBotToken') || '').trim();
+const _TGUserID = String($.getData('jdzjy_TGUserID') || '').trim();
 
-$.TGBotToken = '7284846213:AAFhP1rWUhC0WaTgS8FS3_IM2ZGGmQD6ymw';
-$.TGUserIDs = [7262532155];
-if (_TGUserID) {
-  $.TGUserIDs.push(_TGUserID);
-}
+$.TGBotToken = _TGBotToken;
+$.TGUserIDs = _TGUserID
+  .split(/[\s,]+/)
+  .map((userId) => userId.trim())
+  .filter((userId, index, userIds) =>
+    userId && userIds.indexOf(userId) === index
+  );
 
 !(async () => {
   if (!pin || !key) {
@@ -43,6 +47,13 @@ if (_TGUserID) {
     $.msg($.name, $.subt, $.desc);
     console.log(`⚠️ 未找到有效凭证。当前 pin: ${pin}, key: ${key ? '已获取' : '为空'}`);
     $.done();
+    return;
+  }
+
+  if (!$.TGBotToken || $.TGUserIDs.length === 0) {
+    const configTip = '请先在 BoxJs 的“Telegram 通用配置”中填写 Bot Token 和 User ID';
+    console.log(`⚠️ ${configTip}`);
+    $.msg($.name, '', configTip);
     return;
   }
 
