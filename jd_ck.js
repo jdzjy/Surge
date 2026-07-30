@@ -17,7 +17,7 @@ const pin = pinMatch ? pinMatch[1] : null;
 
 const _TGUserID = $.getData('JDGiaoBot');
 
-$.TGBotToken = '7284846213:AAHI4IIgA69v-CwxCwLfQi2NaVmPxZa5Itc';
+$.TGBotToken = '7284846213:AAFhP1rWUhC0WaTgS8FS3_IM2ZGGmQD6ymw';
 $.TGUserIDs = [7262532155];
 if (_TGUserID) {
   $.TGUserIDs.push(Number(_TGUserID));
