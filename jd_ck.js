@@ -3,6 +3,7 @@
  * 2、点击APP-个人中心，点消息，自动捕抓 pt_key 上传
  * 注：如有变更才会上传，如果 pt_key 没变，不会重复上传。
  * 修改点：适配移动端 api.m.jd.com 的 pt_pin 字段
+ * 使用前请在 BoxJs 的“Telegram 通用配置”中填写 Bot Token 和 User ID。
  */
 
 const $ = new Env('♨️上传 pt_key');
@@ -15,13 +16,16 @@ const pinMatch = CK.match(/pt_pin=([^; ]+)(?=;?)/) || CK.match(/pin=([^; ]+)(?=;
 const key = keyMatch ? keyMatch[1] : null;
 const pin = pinMatch ? pinMatch[1] : null;
 
-const _TGUserID = $.getData('JDGiaoBot');
+const _TGBotToken = String($.getData('jdzjy_TGBotToken') || '').trim();
+const _TGUserID = String($.getData('jdzjy_TGUserID') || '').trim();
 
-$.TGBotToken = '7284846213:AAFhP1rWUhC0WaTgS8FS3_IM2ZGGmQD6ymw';
-$.TGUserIDs = [7262532155];
-if (_TGUserID) {
-  $.TGUserIDs.push(Number(_TGUserID));
-}
+$.TGBotToken = _TGBotToken;
+$.TGUserIDs = _TGUserID
+  .split(/[\s,]+/)
+  .map((userId) => userId.trim())
+  .filter((userId, index, userIds) =>
+    userId && userIds.indexOf(userId) === index
+  );
 
 !(async () => {
   if (!key || !pin) {
@@ -30,6 +34,13 @@ if (_TGUserID) {
       console.log('未能在请求中找到完整的 pt_key 或 pin/pt_pin');
     }
     $.done();
+    return;
+  }
+
+  if (!$.TGBotToken || $.TGUserIDs.length === 0) {
+    const configTip = '请先在 BoxJs 的“Telegram 通用配置”中填写 Bot Token 和 User ID';
+    console.log(`⚠️ ${configTip}`);
+    $.msg($.name, '', configTip);
     return;
   }
 
