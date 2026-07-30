@@ -57,6 +57,13 @@ $.TGUserIDs = _TGUserID
     return;
   }
 
+  if (!/^\d+:[A-Za-z0-9_-]{20,}$/.test($.TGBotToken)) {
+    const tokenTip = 'Bot Token 格式不正确：请只粘贴 BotFather 提供的 Token';
+    console.log(`⚠️ ${tokenTip}`);
+    $.msg($.name, '', tokenTip);
+    return;
+  }
+
   try {
     const cookie = `pt_pin=${pin};wskey=${key};`;
     const userName = pin;
@@ -128,7 +135,7 @@ function updateCookie(cookie, TGUserID) {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: `chat_id=${TGUserID}&text=${cookie}&disable_web_page_preview=true`,
+      body: `chat_id=${TGUserID}&text=${encodeURIComponent(cookie)}&disable_web_page_preview=true`,
     };
 
     $.post(opts, (err, resp, data) => {
@@ -138,14 +145,14 @@ function updateCookie(cookie, TGUserID) {
         } else {
           data = JSON.parse(data);
           if (data.ok) {
-            console.log(`已发送 wskey 至 ${TGUserID}🎉\n`);
-            $.resData = `已发送 wskey 至 ${TGUserID}🎉`;
+            console.log('已通过 Telegram Bot 发送 wskey 🎉\n');
+            $.resData = '已通过 Telegram Bot 发送 wskey 🎉';
           } else if (data.error_code === 400) {
-            console.log(`发送失败，请联系 ${TGUserID}。\n`);
-            $.resData = `发送失败，请联系 ${TGUserID}。`;
+            console.log('Telegram User ID/Chat ID 无效，或机器人无权发送。\n');
+            $.resData = 'Telegram User ID/Chat ID 无效，或机器人无权发送。';
           } else if (data.error_code === 401) {
-            console.log(`${TGUserID} bot token 填写错误。\n`);
-            $.resData = `${TGUserID} bot token 填写错误。`;
+            console.log('Telegram Bot Token 无效或已被撤销，请检查 BoxJs 通用配置。\n');
+            $.resData = 'Telegram Bot Token 无效或已被撤销，请检查 BoxJs 通用配置。';
           }
         }
       } catch (e) {
