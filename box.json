@@ -20,10 +20,10 @@
           "name": "Telegram Bot Token",
           "val": "",
           "type": "textarea",
-          "placeholder": "在此填写 BotFather 提供的 Token",
+          "placeholder": "仅粘贴 Token，例如：123456789:AA...",
           "autoGrow": true,
           "rows": 1,
-          "desc": "仅保存在 BoxJs 中，请勿写入公开仓库"
+          "desc": "不要包含 bot 前缀或 api.telegram.org 地址；仅保存在 BoxJs 中"
         },
         {
           "id": "jdzjy_TGUserID",
