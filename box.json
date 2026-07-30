@@ -6,21 +6,47 @@
   "repo": "https://github.com/jdzjy/Surge",
   "apps": [
     {
+      "id": "jdzjy_telegram",
+      "name": "Telegram 通用配置",
+      "keys": ["jdzjy_TGBotToken", "jdzjy_TGUserID"],
+      "author": "@jdzjy",
+      "icons": [
+        "https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/img/Telegram.png",
+        "https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/img/Telegram.png"
+      ],
+      "settings": [
+        {
+          "id": "jdzjy_TGBotToken",
+          "name": "Telegram Bot Token",
+          "val": "",
+          "type": "textarea",
+          "placeholder": "在此填写 BotFather 提供的 Token",
+          "autoGrow": true,
+          "rows": 1,
+          "desc": "仅保存在 BoxJs 中，请勿写入公开仓库"
+        },
+        {
+          "id": "jdzjy_TGUserID",
+          "name": "Telegram User ID",
+          "val": "",
+          "type": "textarea",
+          "placeholder": "支持一个或多个 ID，使用逗号或换行分隔",
+          "autoGrow": true,
+          "rows": 2,
+          "desc": "支持个人、群组或频道 Chat ID"
+        }
+      ]
+    },
+    {
       "id": "jdzjy_wskey",
       "name": "wskey 提取器",
-      "keys": ["jdzjy_TGUserID", "wskeyList"],
+      "keys": ["wskeyList"],
       "author": "@jdzjy",
       "icons": [
         "https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/img/jdwskey.png",
         "https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/img/jdwskey.png"
       ],
       "settings": [
-        {
-          "id": "jdzjy_TGUserID",
-          "name": "Telegram User ID",
-          "val": "",
-          "type": "number"
-        },
         {
           "id": "wskeyList",
           "name": "wskey List",
@@ -34,19 +60,13 @@
     {
       "id": "jdzjy_pt_key",
       "name": "pt_key 提取器",
-      "keys": ["jdzjy_TGUserID", "pt_keyList"],
+      "keys": ["pt_keyList"],
       "author": "@jdzjy",
       "icons": [
         "https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/img/pt_key.png",
         "https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/img/pt_key.png"
       ],
       "settings": [
-        {
-          "id": "jdzjy_TGUserID",
-          "name": "Telegram User ID",
-          "val": "",
-          "type": "number"
-        },
         {
           "id": "pt_keyList",
           "name": "pt_key List",
