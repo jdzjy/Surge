@@ -6,29 +6,43 @@
  */
 
 const $ = new Env('♨️上传 wskey');
-let CK = $request.headers['Cookie'] || $request.headers['cookie'] || '';
+const requestHeaders =
+  typeof $request !== 'undefined' && $request.headers ? $request.headers : {};
+const responseHeaders =
+  typeof $response !== 'undefined' && $response.headers ? $response.headers : {};
+const requestBody =
+  typeof $request !== 'undefined' ? String($request.body || '') : '';
+const responseBody =
+  typeof $response !== 'undefined' ? String($response.body || '') : '';
+const requestHeaderText = stringifyHeaders(requestHeaders);
+const responseHeaderText = stringifyHeaders(responseHeaders);
+const allHeaderText = [requestHeaderText, responseHeaderText]
+  .filter(Boolean)
+  .join('\n');
+const requestCookie = getHeaderValue(requestHeaders, 'cookie');
+const responseCookie = getHeaderValue(responseHeaders, 'set-cookie');
+const allCookies = [requestCookie, responseCookie, allHeaderText]
+  .filter(Boolean)
+  .join('; ');
 
-let pin = '';
-let key = '';
+// 新版 sh.jd.com/d 请求会直接把 wskey 放在 Cookie 中，但通常没有 pt_pin。
+// 先从当前请求读取 pt_pin；没有时，按 pin_hash 使用此前缓存的 pt_pin。
+const directPin =
+  getCookieValue(allCookies, 'pt_pin') || getCookieValue(allCookies, 'pin');
+const pinHash = getCookieValue(allCookies, 'pin_hash');
+let pin = directPin || getCachedPin(pinHash);
+let key = getCookieValue(allCookies, 'wskey');
 
-// 1. 提取账号 pin (sso接口的 Cookie 里依然包含 pt_pin)
-let pinMatch = CK.match(/(?:pt_)?pin=([^=;]+)/);
-if (pinMatch) {
-  pin = pinMatch[1];
+if (directPin) {
+  rememberPin(directPin, pinHash);
 }
 
-// 2. 仅从新版接口的 Body 中提取 sessionTicket 作为 wskey
-if (typeof $request !== 'undefined' && $request.body) {
-  try {
-    let bodyData = JSON.parse($request.body);
-    if (bodyData.jdstParams && bodyData.jdstParams.length > 0 && bodyData.jdstParams[0].sessionTicket) {
-      key = bodyData.jdstParams[0].sessionTicket;
-      console.log('✅ 成功从 Body(sessionTicket) 提取到 wskey');
-    }
-  } catch (e) {
-    console.log("❌ 解析 Body 提取 sessionTicket 失败: " + e);
-  }
-}
+// 兼容旧版 appJdst/update：从请求体或响应体递归查找 sessionTicket/wskey。
+key =
+  key ||
+  findCredential(requestBody) ||
+  findCredential(responseBody) ||
+  findCredential(allHeaderText);
 
 const _TGBotToken = String($.getData('jdzjy_TGBotToken') || '').trim();
 const _TGUserID = String($.getData('jdzjy_TGUserID') || '').trim();
@@ -42,11 +56,16 @@ $.TGUserIDs = _TGUserID
   );
 
 !(async () => {
-  if (!pin || !key) {
-    $.desc = '未找到 wskey(sessionTicket) 或 pin';
-    $.msg($.name, $.subt, $.desc);
-    console.log(`⚠️ 未找到有效凭证。当前 pin: ${pin}, key: ${key ? '已获取' : '为空'}`);
-    $.done();
+  if (!key) {
+    // 仅用于缓存 pt_pin 的请求不需要提示。
+    return;
+  }
+
+  if (!pin) {
+    const pinTip =
+      '已找到 wskey，但没有匹配的 pt_pin；请先重新打开京东首页后再试';
+    console.log(`⚠️ ${pinTip}`);
+    $.msg($.name, '', pinTip);
     return;
   }
 
@@ -65,21 +84,23 @@ $.TGUserIDs = _TGUserID
   }
 
   try {
+    const accountKey = pin;
     const cookie = `pt_pin=${pin};wskey=${key};`;
     const userName = pin;
-    const decodeName = decodeURIComponent(userName);
-    let cookiesData = JSON.parse($.getData('wskeyList') || '[]');
+    const decodeName = safeDecodeURIComponent(userName);
+    let cookiesData = parseStoredList($.getData('wskeyList'));
     
     let updateIndex;
     let cookieName = '【账号】';
     const existCookie = cookiesData.find((item, index) => {
-      const ck = item.cookie;
-      const Account = ck
-        ? ck.match(/(?:pt_)?pin=(.+?);/)
-          ? ck.match(/(?:pt_)?pin=(.+?);/)[1]
-          : null
-        : null;
-      const verify = userName === Account;
+      const ck = item.cookie || '';
+      const itemKey =
+        item.accountKey ||
+        getCookieValue(ck, 'pt_pin') ||
+        getCookieValue(ck, 'pin') ||
+        getCookieValue(ck, 'pin_hash') ||
+        getCookieValue(ck, 'wskey');
+      const verify = accountKey === itemKey;
       if (verify) {
         updateIndex = index;
         if (ck !== cookie) {
@@ -97,6 +118,7 @@ $.TGUserIDs = _TGUserID
     } else {
       cookiesData.push({
         userName: decodeName,
+        accountKey,
         cookie: cookie,
       });
       cookieName = '【账号' + cookiesData.length + '】';
@@ -118,15 +140,160 @@ $.TGUserIDs = _TGUserID
     return;
   } catch (error) {
     $.msg('写入京东 wskey 失败', '', '请重试 ⚠️');
-    console.log(
-      `\n写入京东 wskey 出现错误 ‼️\n${JSON.stringify(
-        error
-      )}\n\n${error}\n\n${JSON.stringify($request.headers)}\n`
-    );
+    console.log(`\n写入京东 wskey 出现错误 ‼️\n${error}\n`);
   }
 })()
   .catch((e) => $.logErr(e))
   .finally(() => $.done());
+
+function getHeaderValue(headers, name) {
+  const key = Object.keys(headers || {}).find(
+    (item) => item.toLowerCase() === name.toLowerCase()
+  );
+  if (!key) return '';
+  return stringifyHeaderValue(headers[key]);
+}
+
+function getCookieValue(cookieText, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const text = String(cookieText || '');
+  if (!text) return '';
+
+  const direct = text
+    .split(/;\s*/)
+    .map((item) => item.trim())
+    .find((item) => new RegExp(`^${escaped}\\s*=`, 'i').test(item));
+  if (direct) {
+    return cleanCookieValue(direct.replace(new RegExp(`^${escaped}\\s*=`, 'i'), ''));
+  }
+
+  const match = text.match(
+    new RegExp(`(?:^|[;,\\s"'([{])${escaped}\\s*=\\s*([^;,\\s)"'\\\\}]+)`, 'i')
+  );
+  return match ? cleanCookieValue(match[1]) : '';
+}
+
+function findCredential(raw) {
+  if (!raw) return '';
+  const sources = uniqueTexts([String(raw), safeDecodeURIComponent(String(raw))]);
+  const find = (value) => {
+    if (!value || typeof value !== 'object') return '';
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const result = find(item);
+        if (result) return result;
+      }
+      return '';
+    }
+    for (const [name, item] of Object.entries(value)) {
+      if (
+        /^(sessionTicket|wskey)$/i.test(name) &&
+        typeof item === 'string' &&
+        item
+      ) {
+        return item;
+      }
+      const result = find(item);
+      if (result) return result;
+    }
+    return '';
+  };
+  for (const source of sources) {
+    try {
+      const result = find(JSON.parse(source));
+      if (result) return result;
+    } catch (_) {
+      // 请求体可能是 URL 编码或非 JSON，继续使用正则兜底。
+    }
+    const cookieValue = getCookieValue(source, 'wskey');
+    if (cookieValue) return cookieValue;
+
+    const match = source.match(
+      /["']?(sessionTicket|wskey)["']?\s*[:=]\s*["']?([^"'&,;\s}]+)/i
+    );
+    if (match) return cleanCookieValue(match[2]);
+  }
+  return '';
+}
+
+function stringifyHeaders(headers) {
+  return Object.entries(headers || {})
+    .map(([name, value]) => `${name}: ${stringifyHeaderValue(value)}`)
+    .join('\n');
+}
+
+function stringifyHeaderValue(value) {
+  if (Array.isArray(value)) return value.map(stringifyHeaderValue).join('; ');
+  if (value && typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch (_) {
+      return String(value);
+    }
+  }
+  return String(value || '');
+}
+
+function cleanCookieValue(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^\\?["']|\\?["']$/g, '');
+}
+
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch (_) {
+    return value;
+  }
+}
+
+function uniqueTexts(values) {
+  return values.filter((value, index) => value && values.indexOf(value) === index);
+}
+
+function getCachedPin(pinHash) {
+  try {
+    const cache = JSON.parse($.getData('jdzjy_PinCache') || '{}');
+    if (!cache.pin) return '';
+    if (pinHash && cache.pinHash === pinHash) return cache.pin;
+    if (!pinHash && !cache.pinHash) return cache.pin;
+  } catch (_) {
+    // 忽略损坏的缓存，等待下一次带 pt_pin 的请求重新建立。
+  }
+  return '';
+}
+
+function rememberPin(pin, pinHash) {
+  if (!pin) return;
+  $.setData(
+    JSON.stringify({ pin, pinHash: pinHash || '' }),
+    'jdzjy_PinCache'
+  );
+}
+
+function parseStoredList(raw) {
+  try {
+    const data = JSON.parse(raw || '[]');
+    return Array.isArray(data) ? data : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function logRequestContext(headers) {
+  const url = typeof $request !== 'undefined' ? String($request.url || '') : '';
+  const urlInfo = getSafeUrlInfo(url);
+  const headerNames = Object.keys(headers || {}).join(', ') || '无';
+  if (urlInfo) console.log(`当前命中 URL：${urlInfo}`);
+  console.log(`已读取请求头字段：${headerNames}`);
+}
+
+function getSafeUrlInfo(url) {
+  if (!url) return '';
+  const match = url.match(/^(https?:\/\/[^/?#]+)(\/[^?#]*)?/i);
+  return match ? `${match[1]}${match[2] || '/'}` : '';
+}
 
 function updateCookie(cookie, TGUserID) {
   return new Promise((resolve) => {
