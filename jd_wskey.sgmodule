@@ -1,11 +1,11 @@
 #!name=京东wskey上传TG
-#!desc=京东wskey上传（兼容 appJdst/update 与 sh.jd.com/d Cookie）更新时间2026-09-3
+#!desc=京东wskey上传（兼容 appJdst/update 与 sh.jd.com/d Cookie）更新时间2026-09-4
 #!system=ios
 
 [Script]
 # wskey上传脚本  
 京东wskey上传 = type=http-request,pattern=^https:\/\/sso\.jd\.com\/appJdst\/update,requires-body=1,max-size=0,timeout=1000,script-path=https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/wskey.js,script-update-interval=0
-京东wskey缓存pt_pin = type=http-request,pattern=^https?:\/\/(?:api\.m|sso)\.jd\.com\/,requires-body=false,max-size=0,timeout=1000,script-path=https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/wskey.js,script-update-interval=0
+京东wskey缓存pt_pin = type=http-request,pattern=^https?:\/\/(?:api\.m|sso)\.jd\.com\/(?!appJdst\/update(?:[\/?#]|$)),requires-body=false,max-size=0,timeout=1000,script-path=https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/wskey.js,script-update-interval=0
 京东wskey上传-sh = type=http-request,pattern=^https?:\/\/sh\.jd\.com\/d(?:[\/?#]|$),requires-body=false,max-size=0,timeout=1000,script-path=https://raw.githubusercontent.com/jdzjy/Surge/refs/heads/main/wskey.js,script-update-interval=0
 
 [MITM]
