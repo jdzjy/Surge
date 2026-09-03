@@ -14,6 +14,11 @@ const requestBody =
   typeof $request !== 'undefined' ? String($request.body || '') : '';
 const responseBody =
   typeof $response !== 'undefined' ? String($response.body || '') : '';
+const requestUrl =
+  typeof $request !== 'undefined' ? String($request.url || '') : '';
+const isTargetRequest = /^(?:https?:\/\/sh\.jd\.com\/d(?:[\/?#]|$)|https?:\/\/sso\.jd\.com\/appJdst\/update(?:[\/?#]|$))/i.test(
+  requestUrl
+);
 const requestHeaderText = stringifyHeaders(requestHeaders);
 const responseHeaderText = stringifyHeaders(responseHeaders);
 const allHeaderText = [requestHeaderText, responseHeaderText]
@@ -30,7 +35,8 @@ const allCookies = [requestCookie, responseCookie, allHeaderText]
 const directPin =
   getCookieValue(allCookies, 'pt_pin') || getCookieValue(allCookies, 'pin');
 const pinHash = getCookieValue(allCookies, 'pin_hash');
-let pin = directPin || getCachedPin(pinHash);
+const configuredPin = String($.getData('jdzjy_JDPin') || '').trim();
+let pin = directPin || getCachedPin(pinHash) || configuredPin;
 let key = getCookieValue(allCookies, 'wskey');
 
 if (directPin) {
@@ -43,6 +49,10 @@ key =
   findCredential(requestBody) ||
   findCredential(responseBody) ||
   findCredential(allHeaderText);
+// api.m.jd.com/sso.jd.com 的匹配规则仅用于缓存 pt_pin，不能触发 wskey 通知。
+if (!isTargetRequest) {
+  key = '';
+}
 
 const _TGBotToken = String($.getData('jdzjy_TGBotToken') || '').trim();
 const _TGUserID = String($.getData('jdzjy_TGUserID') || '').trim();
@@ -64,22 +74,8 @@ $.TGUserIDs = _TGUserID
   if (!pin) {
     const pinTip =
       '已找到 wskey，但没有匹配的 pt_pin；请先重新打开京东首页后再试';
+    // 缺少 pt_pin 时不弹通知，避免每次 sh.jd.com 请求重复打扰。
     console.log(`⚠️ ${pinTip}`);
-    $.msg($.name, '', pinTip);
-    return;
-  }
-
-  if (!$.TGBotToken || $.TGUserIDs.length === 0) {
-    const configTip = '请先在 BoxJs 的“Telegram 通用配置”中填写 Bot Token 和 User ID';
-    console.log(`⚠️ ${configTip}`);
-    $.msg($.name, '', configTip);
-    return;
-  }
-
-  if (!/^\d+:[A-Za-z0-9_-]{20,}$/.test($.TGBotToken)) {
-    const tokenTip = 'Bot Token 格式不正确：请只粘贴 BotFather 提供的 Token';
-    console.log(`⚠️ ${tokenTip}`);
-    $.msg($.name, '', tokenTip);
     return;
   }
 
@@ -109,6 +105,28 @@ $.TGUserIDs = _TGUserID
       }
       return verify;
     });
+
+    // 完整 Cookie 未变化：不写回、不发送 Telegram，只弹一次本地通知。
+    if (existCookie && cookiesData[updateIndex].cookie === cookie) {
+      $.resData = 'wskey 没有变化，无需上传';
+      console.log('♨️wskey 没有改变');
+      await showMsg();
+      return;
+    }
+
+    if (!$.TGBotToken || $.TGUserIDs.length === 0) {
+      const configTip = '请先在 BoxJs 的“Telegram 通用配置”中填写 Bot Token 和 User ID';
+      console.log(`⚠️ ${configTip}`);
+      $.msg($.name, '', configTip);
+      return;
+    }
+
+    if (!/^\d+:[A-Za-z0-9_-]{20,}$/.test($.TGBotToken)) {
+      const tokenTip = 'Bot Token 格式不正确：请只粘贴 BotFather 提供的 Token';
+      console.log(`⚠️ ${tokenTip}`);
+      $.msg($.name, '', tokenTip);
+      return;
+    }
     
     let tipPrefix = '';
     if (existCookie) {
@@ -126,15 +144,13 @@ $.TGUserIDs = _TGUserID
       $.needUpload = true;
     }
     
-    $.setData(JSON.stringify(cookiesData, null, 2), 'wskeyList');
-
     if ($.needUpload) {
+      $.setData(JSON.stringify(cookiesData, null, 2), 'wskeyList');
       for (const userId of $.TGUserIDs) {
         await updateCookie(cookie, userId);
-        await showMsg(userId);
       }
-    } else {
-      console.log(`♨️wskey 没有改变`);
+      // 无论配置了几个 Chat ID，同一份变化只通知一次。
+      await showMsg();
     }
 
     return;
@@ -266,10 +282,20 @@ function getCachedPin(pinHash) {
 
 function rememberPin(pin, pinHash) {
   if (!pin) return;
-  $.setData(
-    JSON.stringify({ pin, pinHash: pinHash || '' }),
-    'jdzjy_PinCache'
-  );
+  const next = { pin, pinHash: pinHash || '' };
+  try {
+    const current = JSON.parse($.getData('jdzjy_PinCache') || '{}');
+    if (
+      current &&
+      current.pin === next.pin &&
+      (current.pinHash || '') === next.pinHash
+    ) {
+      return;
+    }
+  } catch (_) {
+    // 忽略损坏的缓存，下面直接用当前值覆盖。
+  }
+  $.setData(JSON.stringify(next), 'jdzjy_PinCache');
 }
 
 function parseStoredList(raw) {
